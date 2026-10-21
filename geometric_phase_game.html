@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Piro's Game · A geometric-phase toy</title>
+<meta name="description" content="Drive a spheroid through a Stokes flow and watch the geometric phase misbehave. A toy companion to a paper by O. Piro & J. Arrieta.">
+<meta name="theme-color" content="#f4ede0">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Piro's Game — a geometric-phase toy">
+<meta property="og:description" content="Drive a spheroid through a Stokes flow and watch the geometric phase misbehave.">
+<!-- NB: absolute URL required, or the preview card will not render when shared.
+     Replace once the GitHub Pages URL is final. -->
+<meta property="og:image" content="https://jarrietasanagustin.github.io/REPO/og_card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A schematic of a spheroid in a journal-bearing flow with geometric phase.">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Piro's Game — a geometric-phase toy">
+<meta name="twitter:description" content="Drive a spheroid through a Stokes flow and watch the geometric phase misbehave.">
+<meta name="twitter:image" content="https://jarrietasanagustin.github.io/REPO/og_card.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:        #1a1612;
+    --paper:      #f4ede0;
+    --paper-2:    #ebe2cf;
+    --rust:       #b8552d;
+    --rust-deep:  #8a3d1f;
+    --teal:       #2d6e6e;
+    --teal-deep:  #1f5050;
+    --gold:       #c9a13b;
+    --shadow:     rgba(26, 22, 18, 0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Fraunces', Georgia, serif;
+    font-feature-settings: 'liga', 'dlig';
+    overflow-x: clip;        /* NOT hidden: that would break position:sticky */
+    min-height: 100vh;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(184, 85, 45, 0.06) 0, transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(45, 110, 110, 0.05) 0, transparent 40%);
+  }
+  .grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: 0.4;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.15'/%3E%3C/svg%3E");
+  }
+
+  .stage {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 36px;
+    position: relative;
+    z-index: 2;
+  }
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1.5px solid var(--ink);
+    padding-bottom: 10px;
+    margin-bottom: 18px;
+  }
+  .masthead h1 {
+    font-weight: 700;
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    font-style: italic;
+    letter-spacing: -0.02em;
+    line-height: 0.95;
+  }
+  .masthead h1 em {
+    font-style: normal;
+    color: var(--rust);
+  }
+  .masthead .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink);
+    opacity: 0.6;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 920px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--paper-2);
+    border: 1px solid var(--ink);
+    box-shadow: 6px 6px 0 var(--ink);
+    padding: 20px;
+    position: relative;
+  }
+  .panel + .panel { margin-top: 20px; }
+  .panel-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--rust);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-title::before {
+    content: '';
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: var(--rust);
+  }
+
+  #stage-canvas {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    display: block;
+    cursor: crosshair;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .canvas-wrap { position: relative; }
+  .canvas-overlay {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(244, 237, 224, 0.92);
+    border: 1px solid var(--ink);
+    padding: 8px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    text-align: right;
+    pointer-events: none;
+  }
+  .canvas-overlay .v { color: var(--rust); font-weight: 600; }
+
+  .field { margin-bottom: 18px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 6px;
+  }
+  .field label .name { color: var(--ink); }
+  .field label .val { color: var(--rust); font-weight: 600; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%;
+    height: 18px;
+    background: transparent;
+    cursor: grab;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--ink);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 2px;
+    background: var(--ink);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 16px; height: 16px;
+    background: var(--rust);
+    border: 2px solid var(--ink);
+    border-radius: 0;
+    margin-top: -8px;
+    transform: rotate(45deg);
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    background: var(--rust);
+    border: 2px solid var(--ink);
+    border-radius: 0;
+    transform: rotate(45deg);
+  }
+  input[type="range"]:active { cursor: grabbing; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    padding: 12px 18px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+    box-shadow: 3px 3px 0 var(--rust);
+    font-weight: 500;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--rust);
+  }
+  button:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--rust);
+  }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  button.ghost:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--paper);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+
+  .button-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .mode-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border: 1px solid var(--ink);
+  }
+  .mode-toggle button {
+    flex: 1;
+    background: var(--paper-2);
+    color: var(--ink);
+    box-shadow: none;
+    padding: 8px;
+    border-right: 1px solid var(--ink);
+    font-size: 0.65rem;
+  }
+  .mode-toggle button:last-child { border-right: none; }
+  .mode-toggle button.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .mode-toggle button:hover:not(.active) {
+    background: var(--paper);
+  }
+
+  .status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.6;
+    padding: 10px 12px;
+    background: var(--paper);
+    border: 1px dashed var(--ink);
+    margin-bottom: 16px;
+    min-height: 56px;
+  }
+  .status .label {
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink);
+    opacity: 0.55;
+    font-size: 0.62rem;
+  }
+  .status .v { color: var(--rust); }
+  .victory {
+    background: var(--gold);
+    border: 1.5px solid var(--ink);
+    color: var(--ink);
+    animation: pulse 1.2s ease-out;
+  }
+  .victory .label { color: var(--ink); opacity: 0.8; }
+  .victory .v { color: var(--rust-deep); font-weight: 700; }
+  .result-card {
+    margin: 14px 0 4px; padding: 14px 16px;
+    border: 1px solid var(--rust); border-left: 4px solid var(--rust-deep);
+    background: rgba(184, 85, 45, 0.07); border-radius: 4px;
+    font-size: 0.86rem; line-height: 1.5;
+  }
+  .result-head {
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.08em;
+    font-size: 0.72rem; color: var(--rust-deep); margin-bottom: 8px;
+  }
+  .result-line { margin-bottom: 7px; }
+  .result-score {
+    font-family: var(--mono); font-size: 1.05rem; margin: 10px 0 8px;
+    color: var(--rust-deep);
+  }
+  .result-score .label { font-size: 0.7rem; text-transform: none; letter-spacing: 0; }
+  @keyframes pulse {
+    0%   { transform: scale(0.95); }
+    50%  { transform: scale(1.02); }
+    100% { transform: scale(1); }
+  }
+
+  .preflight-note {
+    font-style: italic;
+    color: var(--ink);
+    opacity: 0.7;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    padding: 14px 16px;
+    border-left: 3px solid var(--rust);
+    background: rgba(184, 85, 45, 0.04);
+    margin-bottom: 18px;
+  }
+  .display-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-top: 10px;
+  }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend .dot {
+    width: 10px; height: 10px;
+    display: inline-block;
+  }
+  .dot-rust  { background: var(--rust); }
+  .dot-teal  { background: var(--teal); border: 1px solid var(--ink); }
+  .dot-gold  { background: var(--gold); border: 1px solid var(--ink); border-radius: 50%; }
+
+  .footnote {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    text-align: center;
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(26, 22, 18, 0.25);
+    color: var(--ink);
+    opacity: 0.5;
+    line-height: 1.7;
+  }
+
+  .plot-block { display: block; }
+  .plot-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink);
+    opacity: 0.7;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .plot-current { color: var(--rust); opacity: 1; font-weight: 600; }
+  svg.plot, #plot-dist, #plot-ang {
+    width: 100%;
+    height: 100px;
+    display: block;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+  }
+
+  .intro-veil {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(244, 237, 224, 0.96);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: fadeIn 0.4s ease-out;
+  }
+  .intro-card {
+    max-width: 480px;
+    background: var(--paper-2);
+    border: 1.5px solid var(--ink);
+    box-shadow: 8px 8px 0 var(--ink);
+    padding: 28px 26px 24px;
+    text-align: left;
+  }
+  .intro-card h2 {
+    font-style: italic; font-weight: 700; color: var(--ink);
+    font-size: 2rem; line-height: 1; letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .intro-card h2 em { font-style: normal; color: var(--rust); }
+  .intro-card .intro-sub {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+    text-transform: uppercase; letter-spacing: 0.18em;
+    color: var(--ink); opacity: 0.65; margin-bottom: 18px;
+  }
+  .intro-card p {
+    font-size: 1.02rem; line-height: 1.55; margin-bottom: 12px; color: var(--ink);
+  }
+  .intro-card p .accent { color: var(--rust); font-weight: 600; }
+  .intro-card .intro-meta {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.62rem;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--ink); opacity: 0.6; margin-top: 14px;
+    line-height: 1.7;
+  }
+  .intro-card button.intro-go {
+    width: 100%; margin-top: 18px;
+    padding: 16px;
+    font-size: 0.85rem;
+    box-shadow: 4px 4px 0 var(--rust);
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .share-btn {
+    position: absolute; top: 14px; right: 0;
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--ink);
+    padding: 6px 12px;
+    font-size: 0.62rem;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .share-btn.copied { background: var(--gold); }
+
+  @media (max-width: 720px) {
+    body { background-image: none; }
+    .grain { opacity: 0.25; }
+    .stage { padding: 14px 14px 28px; }
+    .masthead {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+      position: relative;
+    }
+    .masthead h1 { font-size: 2.1rem; line-height: 1; }
+    .masthead h1 br + span {
+      display: block;
+      font-size: 0.95rem !important;
+      margin-top: 4px;
+    }
+    .masthead .meta {
+      font-size: 0.6rem;
+      letter-spacing: 0.14em;
+      line-height: 1.5;
+    }
+    .share-btn { top: 10px; right: 0; }
+    .layout { display: block; }
+    .layout > div + div { margin-top: 14px; }
+    .panel { padding: 16px; box-shadow: 4px 4px 0 var(--ink); }
+    .panel + .panel { margin-top: 14px; }
+    /* Cap the canvas so the particle and the controls share one screen.
+       Without this the Run button sits ~900px down and you cannot watch
+       the particle and tap at the same time. */
+    /* The flow stays pinned at the top while the controls scroll under it,
+       so you can watch the particle and reach Run without hunting. */
+    .canvas-wrap { display: flex; justify-content: center; }
+    .layout > div:first-child {
+      position: sticky; top: 0; z-index: 4;
+      background: var(--paper); padding-bottom: 6px;
+    }
+    .layout > div:first-child .panel { box-shadow: 0 4px 0 var(--ink); }
+    .layout > div:first-child .legend { display: none; }
+    .canvas-overlay { top: 8px; right: 8px; padding: 6px 8px; font-size: 0.62rem; }
+    input[type="range"] { height: 44px; padding: 0; }
+    input[type="range"]::-webkit-slider-runnable-track { height: 3px; }
+    input[type="range"]::-moz-range-track { height: 3px; }
+    input[type="range"]::-webkit-slider-thumb {
+      width: 26px; height: 26px;
+      margin-top: -13px;
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+    input[type="range"]::-moz-range-thumb { width: 26px; height: 26px; }
+    .field { margin-bottom: 14px; }
+    .field label { font-size: 0.7rem; margin-bottom: 4px; }
+    button { padding: 14px 16px; font-size: 0.78rem; min-height: 48px; }
+    .mode-toggle button { min-height: 40px; padding: 10px; }
+    .button-row { grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+    .button-row .ghost { order: 2; }
+    .row { grid-template-columns: 1fr; gap: 10px; }
+    .preflight-note { font-size: 0.78rem; padding: 10px 12px; }
+    .legend { gap: 10px; font-size: 0.58rem; }
+    .footnote { font-size: 0.55rem; line-height: 1.5; }
+    svg.plot, #plot-dist, #plot-ang { height: 90px; }
+    .intro-card { padding: 22px 20px 18px; box-shadow: 5px 5px 0 var(--ink); }
+    .intro-card h2 { font-size: 1.65rem; }
+    .intro-card p { font-size: 0.95rem; }
+  }
+
+  @media (max-width: 380px) {
+    .stage { padding: 12px 10px; }
+    .masthead h1 { font-size: 1.85rem; }
+    .panel { padding: 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes fadeIn { from { opacity: 1; } to { opacity: 1; } }
+    @keyframes pulse { from {} to {} }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+
+<div class="intro-veil" id="intro-veil">
+  <div class="intro-card">
+    <h2><em>Piro's</em> Game</h2>
+    <div class="intro-sub">a geometric-phase toy</div>
+    <p>Drive a tiny <span class="accent">spheroid</span> through a Stokes flow by rotating two cylinders.</p>
+    <p>Rotating both back to start should return everything home — but it doesn't. The particle drifts, and rotates. That stubborn residue is the <span class="accent">geometric phase</span>.</p>
+    <p>Your job: dial a loop, run it, repeat. Try to land both <span class="accent">position</span> and <span class="accent">orientation</span> on the target.</p>
+    <p>You get <span class="accent">20 cycles</span>, and nobody wins. Stop when you like, and you are told exactly how far off you left it. Lower score, better driving.</p>
+    <div class="intro-meta">
+      Concept · O. Piro<br>
+      By · O. Piro &amp; J. Arrieta
+    </div>
+    <button class="intro-go" id="btn-intro-go">Begin →</button>
+  </div>
+</div>
+<div class="stage">
+
+  <div class="masthead">
+    <h1><em>Piro's Game</em><br><span style="font-size:0.55em; font-style:normal; color:var(--ink); opacity:0.7;">a geometric-phase toy</span></h1>
+    <div class="meta">An idea by O. Piro · developed by O. Piro &amp; J. Arrieta</div>
+    <button class="share-btn" id="btn-share" title="Copy link">↗ Share</button>
+  </div>
+
+  <div class="layout">
+
+    <div>
+      <div class="panel">
+        <div class="panel-title">The journal-bearing flow</div>
+        <div class="canvas-wrap">
+          <canvas id="stage-canvas" width="700" height="700"></canvas>
+          <div class="canvas-overlay" id="readout">
+            <div><span class="label">x, y</span></div>
+            <div><span class="v" id="r-pos">—</span></div>
+            <div><span class="label">φ</span></div>
+            <div><span class="v" id="r-phi">—</span></div>
+          </div>
+        </div>
+        <div class="legend">
+          <span><span class="dot dot-rust"></span> particle / outer mark</span>
+          <span><span class="dot dot-teal"></span> target / inner mark</span>
+          <span><span class="dot dot-gold"></span> trail</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="mode-toggle">
+        <button id="tab-setup" class="active">① Setup</button>
+        <button id="tab-play">② Play</button>
+      </div>
+
+      <div class="panel" id="panel-setup">
+        <div class="panel-title">Stage parameters</div>
+        <div class="preflight-note">
+          Place the <em>spheroid</em> and the <em>target</em> inside the annulus, choose
+          orientations, then commit. The flow is the same for everyone &mdash; only your
+          loops differ.
+        </div>
+
+        <div class="status display-mono" style="margin-bottom:16px;">
+          <div><span class="label">fixed for every player</span></div>
+          <div>&epsilon; = 0.40 &nbsp;·&nbsp; A = 5.0 &nbsp;·&nbsp; R&#8321; = 1, R&#8322; = 0.3</div>
+          <div>tolerance &nbsp; pos 0.10 &nbsp;·&nbsp; angle 0.30 rad</div>
+        </div>
+
+        <div class="status display-mono" style="margin-top:10px;">
+          <div><span class="label">place mode</span></div>
+          <div id="place-instruction" class="v">Click in the annulus to set spheroid →</div>
+        </div>
+
+        <div class="row" id="row-phi" style="margin-top:14px;">
+          <div class="field">
+            <label><span class="name">φ₀ start</span><span class="val" id="v-phi0">0.00</span></label>
+            <input type="range" id="s-phi0" min="-3.14159" max="3.14159" step="0.01" value="0.00">
+          </div>
+          <div class="field">
+            <label><span class="name">φ_T target</span><span class="val" id="v-phiT">0.00</span></label>
+            <input type="range" id="s-phiT" min="-3.14159" max="3.14159" step="0.01" value="0.00">
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button id="btn-commit">Commit &amp; Play</button>
+          <button id="btn-randomize" class="ghost">Random</button>
+          <button id="btn-freeplay" class="ghost" style="grid-column:1/-1;">Free play</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-play" style="display:none;">
+        <div class="panel-title">Choose your cycle</div>
+
+        <div class="status">
+          <div><span class="label">distance to target</span></div>
+          <div id="r-dist"><span class="v">—</span></div>
+          <div style="margin-top:6px;"><span class="label">angular distance</span></div>
+          <div id="r-adist"><span class="v">—</span></div>
+          <div style="margin-top:6px;"><span class="label">cycles played</span></div>
+          <div id="r-cycles"><span class="v">0</span></div>
+        </div>
+
+        <div class="field">
+          <label><span class="name">θ₁  outer cylinder</span><span class="val" id="v-t1">+0.00 π</span></label>
+          <input type="range" id="s-t1" min="-6.2832" max="6.2832" step="0.0628" value="6.2832">
+        </div>
+        <div class="field">
+          <label><span class="name">θ₂  inner cylinder</span><span class="val" id="v-t2">+0.00 π</span></label>
+          <input type="range" id="s-t2" min="-6.2832" max="6.2832" step="0.0628" value="6.2832">
+        </div>
+
+        <div class="preflight-note">
+          One full cycle = <em>outer +θ₁</em>, <em>inner +θ₂</em>, <em>outer −θ₁</em>, <em>inner −θ₂</em>.
+          The closed loop in parameter space encloses area θ₁·θ₂.
+          <br><br>You get <strong>20 cycles</strong>. There is no winning: stop whenever you
+          like and you are scored on how close you left the spheroid, in position
+          <em>and</em> in orientation.
+        </div>
+
+        <div id="result-card" class="result-card" style="display:none;"></div>
+
+        <div class="button-row">
+          <button id="btn-run">Run cycle</button>
+          <button id="btn-finish" class="ghost">Stop &amp; score</button>
+        </div>
+        <div class="button-row" style="grid-template-columns:1fr; margin-top:8px;">
+          <button id="btn-reset" class="ghost">Start over</button>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-plots" style="display:none;">
+        <div class="panel-title">History</div>
+        <div class="plot-block">
+          <div class="plot-label"><span>position distance</span><span class="plot-current" id="plot-dist-now">—</span></div>
+          <svg id="plot-dist" viewBox="0 0 320 100" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="plot-block" style="margin-top:14px;">
+          <div class="plot-label"><span>angular distance</span><span class="plot-current" id="plot-ang-now">—</span></div>
+          <svg id="plot-ang" viewBox="0 0 320 100" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footnote">Berry phase ⨉ Stokes flow ⨉ a small spheroid that misbehaves<br>
+  <span style="opacity:0.7;">Concept: O. Piro · Implementation: O. Piro &amp; J. Arrieta</span></div>
+</div>
+
+<script>
+function precomputeGeometry(R1, R2, eps, AR) {
+  const b = (1/(2*eps)) * Math.sqrt((R1*R1 + R2*R2 - eps*eps)**2 - 4*R1*R1*R2*R2);
+  const xi1 = Math.asinh(-b/R1), xi2 = Math.asinh(-b/R2);
+  const Delta = (xi1-xi2)**2 - Math.sinh(xi1-xi2)**2;
+  const Delta_bar = (xi1-xi2)*Math.cosh(xi1-xi2) - Math.sinh(xi1-xi2);
+  const Delta_star = Math.sinh(xi1-xi2)*(2*Math.sinh(xi1)*Math.sinh(xi2)*Math.sinh(xi1-xi2)
+                     - (xi1-xi2)*(Math.sinh(xi1)**2 + Math.sinh(xi2)**2));
+  const h1 = (xi1-xi2)*Math.sinh(xi1) - Math.sinh(xi2)*Math.sinh(xi1-xi2);
+  const h2 = -(xi1-xi2)*Math.sinh(xi2) + Math.sinh(xi1)*Math.sinh(xi1-xi2);
+  const h3 = xi1*Math.sinh(xi2)*Math.sinh(xi1-xi2) - xi2*(xi1-xi2)*Math.sinh(xi1);
+  const h4 = -xi2*Math.sinh(xi1)*Math.sinh(xi1-xi2) + xi1*(xi1-xi2)*Math.sinh(xi2);
+  const h5 = -xi1*Math.cosh(xi2)*Math.sinh(xi1-xi2) + xi2*(xi1-xi2)*Math.cosh(xi1);
+  const h6 = xi2*Math.cosh(xi1)*Math.sinh(xi1-xi2) - xi1*(xi1-xi2)*Math.cosh(xi2);
+  const h7 = Math.sinh(xi2)*Math.cosh(xi1)*Math.sinh(xi1-xi2)
+             + 0.5*xi1*Math.sinh(2*xi2) - 0.5*xi2*Math.sinh(2*xi1) - xi2*(xi1-xi2);
+  const h8 = -Math.cosh(xi1)*Math.cosh(xi2)*Math.sinh(xi1-xi2)
+             + xi2*Math.cosh(xi1)**2 - xi1*Math.cosh(xi2)**2;
+  return {
+    b, R1, R2, xi1,
+    f1:(Delta_bar/Delta_star*h1*h7+h3)/Delta, f2:(Delta_bar/Delta_star*h2*h7+h4)/Delta,
+    f3:(Delta_bar/Delta_star*h1*h8+h5)/Delta, f4:(Delta_bar/Delta_star*h2*h8+h6)/Delta,
+    f5:h1/Delta_star*Math.cosh(xi1-xi2),  f6:h2/Delta_star*Math.cosh(xi1-xi2),
+    f7:-Math.sinh(xi2)/Delta_star*Math.sinh(xi1-xi2)**2,
+    f8:-Math.sinh(xi1)/Delta_star*Math.sinh(xi1-xi2)**2,
+    f9:-0.5*h1/Delta_star*Math.sinh(xi1+xi2), f10:-0.5*h2/Delta_star*Math.sinh(xi1+xi2),
+    f11:0.5*h1/Delta_star*Math.cosh(xi1+xi2), f12:0.5*h2/Delta_star*Math.cosh(xi1+xi2),
+    f13:h1/(2*Delta_star)*(Math.sinh(xi1-xi2)+2*xi2*Math.cosh(xi1-xi2)),
+    f14:h2/(2*Delta_star)*(Math.sinh(xi1-xi2)+2*xi2*Math.cosh(xi1-xi2)),
+    aniso:(AR*AR-1)/(AR*AR+1),
+    l: -b/Math.tanh(xi1),
+    xi2,
+    R1_geom: { cx: -b/Math.tanh(xi1), r: Math.abs(b/Math.sinh(xi1)) },
+    R2_geom: { cx: -b/Math.tanh(xi2), r: Math.abs(b/Math.sinh(xi2)) }
+  };
+}
+
+function rhs(xi, eta, theta, w1, w2, g) {
+  const cxi = Math.cosh(xi), sxi = Math.sinh(xi);
+  const cet = Math.cos(eta),  sett = Math.sin(eta);
+  const denom = cxi - cet, H = g.b/denom;
+  const A0 = g.f1*w1*g.R1 + g.f2*w2*g.R2,  B0 = g.f3*w1*g.R1 + g.f4*w2*g.R2;
+  const C0 = g.f5*w1*g.R1 + g.f6*w2*g.R2,  D0 = g.f7*w1*g.R1 + g.f8*w2*g.R2;
+  const A1 = g.f9 *w1*g.R1 + g.f10*w2*g.R2, B1 = g.f11*w1*g.R1 + g.f12*w2*g.R2;
+  const C1 = -g.f5*w1*g.R1 - g.f6*w2*g.R2,  D1 = g.f13*w1*g.R1 + g.f14*w2*g.R2;
+  const F0 = (A0 + C0*xi)*cxi + (B0 + D0*xi)*sxi;
+  const F1 = A1*Math.cosh(2*xi) + B1*Math.sinh(2*xi) + C1*xi + D1;
+  const phi0 = F0 + F1*cet;
+  const s = sxi*sett, c = cxi*cet - 1;
+  const c_xi = sxi*cet, s_xi = cxi*sett, c_eta = -cxi*sett, s_eta = sxi*cet;
+  const h_eta = -g.b*sett/(denom*denom), h_xi = -g.b*sxi/(denom*denom);
+  const df0_dxi = sxi*(A0 + xi*C0 + D0) + cxi*(B0 + C0 + xi*D0);
+  const df1_dxi = 2*Math.sinh(2*xi)*A1 + 2*Math.cosh(2*xi)*B1 + C1;
+  const phi0_xi = df0_dxi + df1_dxi*cet, phi0_eta = -F1*sett;
+  const dpsi_eta = -g.b*phi0*sett/(denom*denom) - H*F1*sett;
+  const dpsi_xi  = -g.b*phi0*sxi/(denom*denom)
+                   + H*(C0*cxi + (A0+C0*xi)*sxi + D0*sxi + (B0+D0*xi)*cxi
+                        + (2*A1*Math.sinh(2*xi) + 2*B1*Math.cosh(2*xi) + C1)*cet);
+  const u_xi = dpsi_eta/H, u_eta = -dpsi_xi/H;
+  const h_eta_2 = -g.b*(cet/(denom*denom) - 2*sett*sett/denom**3);
+  const h_eta_xi = 2*g.b*sett*sxi/denom**3;
+  const h_xi_2 = -g.b*(cxi/(denom*denom) - 2*sxi*sxi/denom**3);
+  const df0_dxi_xi = cxi*(A0 + xi*C0 + 2*D0) + sxi*(B0 + 2*C0 + xi*D0);
+  const df1_dxi_xi = 4*Math.cosh(2*xi)*A1 + 4*Math.sinh(2*xi)*B1;
+  const phi0_xi_xi = df0_dxi_xi + df1_dxi_xi*cet;
+  const psi_xi_2 = h_xi_2*phi0 + 2*h_xi*phi0_xi + H*phi0_xi_xi;
+  const phi0_eta_2 = -F1*cet, phi0_eta_xi = -df1_dxi*sett;
+  const psi_eta_2 = h_eta_2*phi0 + 2*h_eta*phi0_eta + H*phi0_eta_2;
+  const dpsi_dxi_deta = h_eta_xi*phi0 + h_eta*phi0_xi + h_xi*phi0_eta + H*phi0_eta_xi;
+  const vort = -0.5*(psi_xi_2 + psi_eta_2)/(H*H);
+  const ib2 = 1/(g.b*g.b);
+  const eps_xx =  ib2*(dpsi_xi*(-c*s_xi - s*s_eta) - c*s*psi_xi_2
+                       + dpsi_dxi_deta*(c*c-s*s) + dpsi_eta*(c*c_xi+s*c_eta) + s*c*psi_eta_2);
+  const eps_yy = -ib2*(dpsi_xi*(-s*c_xi + c*c_eta) - psi_xi_2*s*c
+                       + dpsi_dxi_deta*(c*c-s*s) + dpsi_eta*(-s*s_xi+c*s_eta) + s*c*psi_eta_2);
+  const dux_dy =  ib2*(dpsi_xi*(s*s_xi - c*s_eta) + s*s*psi_xi_2
+                       - 2*c*s*dpsi_dxi_deta + (c*c_eta-s*c_xi)*dpsi_eta + c*c*psi_eta_2);
+  const duy_dx = -ib2*(dpsi_xi*(c*c_xi + s*c_eta) + c*c*psi_xi_2
+                       + 2*c*s*dpsi_dxi_deta + (c*s_xi+s*s_eta)*dpsi_eta + s*s*psi_eta_2);
+  const eps_xy = 0.5*(dux_dy + duy_dx);
+  const cth = Math.cos(theta), sth = Math.sin(theta);
+  const a00 =  cth*eps_xx - sth*eps_xy, a01 =  cth*eps_xy - sth*eps_yy;
+  const eps_xy_p = a00*sth + a01*cth;
+  return [u_xi/H, u_eta/H, vort + g.aniso*eps_xy_p];
+}
+
+function rk4StepRecord(state, w1, w2, h, g, traj, recordEvery, counterRef, cylAngles) {
+  let [xi, eta, th] = state;
+  const k1 = rhs(xi, eta, th, w1, w2, g);
+  const k2 = rhs(xi + 0.5*h*k1[0], eta + 0.5*h*k1[1], th + 0.5*h*k1[2], w1, w2, g);
+  const k3 = rhs(xi + 0.5*h*k2[0], eta + 0.5*h*k2[1], th + 0.5*h*k2[2], w1, w2, g);
+  const k4 = rhs(xi + h*k3[0], eta + h*k3[1], th + h*k3[2], w1, w2, g);
+  xi += h*(k1[0] + 2*k2[0] + 2*k3[0] + k4[0])/6;
+  eta += h*(k1[1] + 2*k2[1] + 2*k3[1] + k4[1])/6;
+  th += h*(k1[2] + 2*k2[2] + 2*k3[2] + k4[2])/6;
+  cylAngles.outer += h * w1;
+  cylAngles.inner += h * w2;
+  counterRef.n++;
+  if (counterRef.n % recordEvery === 0) {
+    traj.push([xi, eta, th, cylAngles.outer, cylAngles.inner]);
+  }
+  return [xi, eta, th];
+}
+
+function integrateLoop(state0, theta1, theta2, g, nStepsPerSegment) {
+  const cylAngles = { outer: 0, inner: 0 };
+  const traj = [[state0[0], state0[1], state0[2], 0, 0]];
+  const recordEvery = Math.max(1, Math.floor(nStepsPerSegment/40));
+  const counter = { n: 0 };
+  let state = state0.slice();
+  function segment(w1, w2, T) {
+    if (T === 0) return;
+    const h = T/nStepsPerSegment;
+    for (let i = 0; i < nStepsPerSegment; i++) {
+      state = rk4StepRecord(state, w1, w2, h, g, traj, recordEvery, counter, cylAngles);
+    }
+  }
+  segment(Math.sign(theta1) || 0, 0, Math.abs(theta1));
+  segment(0, Math.sign(theta2) || 0, Math.abs(theta2));
+  segment(-Math.sign(theta1) || 0, 0, Math.abs(theta1));
+  segment(0, -Math.sign(theta2) || 0, Math.abs(theta2));
+  return { traj, finalState: state, finalCyl: { outer: cylAngles.outer, inner: cylAngles.inner } };
+}
+
+function cartToBipolar(x, y, b) {
+  const xi = -0.5*Math.log(((x+b)**2 + y*y) / ((x-b)**2 + y*y));
+  let eta = Math.atan2(2*y*b, x*x + y*y - b*b);
+  if (eta < 0) eta += 2*Math.PI;
+  return [xi, eta];
+}
+function bipolarToCart(xi, eta, b) {
+  const d = Math.cosh(xi) - Math.cos(eta);
+  return [-b*Math.sinh(xi)/d, b*Math.sin(eta)/d];
+}
+
+// The competition everyone plays. Verified with the game's own integrator:
+// no single loop wins it, and a greedy search solves it in 3 cycles — so a
+// human has real slack inside the 20-cycle cap.
+// Harder presets, same tolerances, if this proves too easy:
+//   start [0,-0.60,0] -> target [-0.30, 0.75, pi/2]   (greedy 6)
+//   start [0, 0.80,0] -> target [-0.60, 0.40, pi/2]   (greedy 6)
+const CHALLENGE = {
+  start:  { x: 0.00, y: -0.60, phi: 0.0 },
+  target: { x: 0.50, y:  0.40, phi: Math.PI/2 }
+};
+
+const MAX_CYCLES = 20;          // a run is over after this many loops
+
+const state = {
+  R1: 1.0, R2: 0.3,
+  eps: 0.4, AR: 5.0,
+  tolPos: 0.10, tolAng: 0.30,
+  geom: null,
+  start:  { x: 0.00, y: -0.6, phi: 0.0 },
+  target: { x: 0.50, y:  0.4, phi: 0.0 },
+  current:{ xi: 0,   eta: 0,  phi: 0.0 },
+  placeMode: 'start',
+  cycles: 0,
+  trail: [],
+  animating: false,
+  mode: 'setup',
+  won: false,
+  history: { dist: [], ang: [] },
+  showVector: false,
+  cylAngles: { outer: 0, inner: 0 },
+  challenge: true          // competition mode: fixed start and target
+};
+
+function applyChallenge() {
+  state.start  = { ...CHALLENGE.start };
+  state.target = { ...CHALLENGE.target };
+  const [xi, eta] = cartToBipolar(state.start.x + state.geom.l, state.start.y, state.geom.b);
+  state.current = { xi, eta, phi: state.start.phi };
+  val('s-phi0').value = state.start.phi;
+  val('s-phiT').value = state.target.phi;
+  val('v-phi0').textContent = state.start.phi.toFixed(2);
+  val('v-phiT').textContent = state.target.phi.toFixed(2);
+}
+
+function applyModeUI() {
+  const ch = state.challenge;
+  val('row-phi').style.display      = ch ? 'none' : 'grid';
+  val('btn-randomize').style.display = ch ? 'none' : 'block';
+  val('btn-commit').textContent = ch ? 'Start challenge' : 'Commit & Play';
+  val('btn-freeplay').textContent = ch ? 'Free play' : 'Back to challenge';
+  val('place-instruction').innerHTML = ch
+    ? 'Everyone starts from the same place, aiming at the same target. '
+      + 'Your only choice is which loops to run.'
+    : 'Tap in the annulus to set the spheroid, then again for the target. '
+      + '<em>Free play is not scored.</em>';
+}
+
+function rebuildGeom() {
+  state.geom = precomputeGeometry(state.R1, state.R2, state.eps, state.AR);
+  const [xi, eta] = cartToBipolar(state.start.x + state.geom.l, state.start.y, state.geom.b);
+  state.current = { xi, eta, phi: state.start.phi };
+}
+
+function inAnnulus(x, y) {
+  const g = state.geom;
+  const xBf = x + g.l;
+  const dOuter = Math.sqrt((xBf - g.R1_geom.cx)**2 + y*y);
+  const dInner = Math.sqrt((xBf - g.R2_geom.cx)**2 + y*y);
+  return dOuter < g.R1_geom.r - 0.02 && dInner > g.R2_geom.r + 0.02;
+}
+
+function currentUserPos() {
+  const [xBf, yBf] = bipolarToCart(state.current.xi, state.current.eta, state.geom.b);
+  return { x: xBf - state.geom.l, y: yBf };
+}
+
+function distToTarget() {
+  const p = currentUserPos();
+  const dx = p.x - state.target.x, dy = p.y - state.target.y;
+  return { pos: Math.sqrt(dx*dx + dy*dy), p };
+}
+function angDist() {
+  let d = state.current.phi - state.target.phi;
+  d = Math.atan2(Math.sin(d), Math.cos(d));
+  return Math.abs(d);
+}
+
+const canvas = document.getElementById('stage-canvas');
+const ctx = canvas.getContext('2d');
+
+function setupCanvas() {
+  // Size the canvas from its CONTAINER, never from itself. Letting CSS derive
+  // the canvas width from its intrinsic size (width:auto) while script rewrites
+  // that intrinsic size each resize is circular, and browsers resolve it
+  // differently. Explicit px here also removes any dependence on aspect-ratio
+  // or vh units, neither of which is safe on older iOS.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const wrap = canvas.parentElement;
+  const avail = wrap.clientWidth || canvas.clientWidth || 320;
+  const narrow = window.matchMedia('(max-width: 720px)').matches;
+  const side = Math.max(200, Math.round(
+    narrow ? Math.min(avail, window.innerHeight * 0.46) : avail));
+  canvas.style.width  = side + 'px';
+  canvas.style.height = side + 'px';
+  canvas.width  = Math.round(side * dpr);
+  canvas.height = Math.round(side * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', () => { setupCanvas(); render(); });
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => { setupCanvas(); render(); }, 150);
+});
+
+const VIEW = 1.25;
+function userToPx(x, y) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = rect.width/2, cy = rect.height/2;
+  const scale = (Math.min(rect.width, rect.height)/2) / VIEW;
+  return { px: cx + x*scale, py: cy - y*scale, scale };
+}
+function pxToUser(px, py) {
+  const rect = canvas.getBoundingClientRect();
+  const cx = rect.width/2, cy = rect.height/2;
+  const scale = (Math.min(rect.width, rect.height)/2) / VIEW;
+  return { x: (px - cx)/scale, y: -(py - cy)/scale };
+}
+
+function drawSpheroid(x, y, phi, AR, color, opacity = 1) {
+  const { px, py, scale } = userToPx(x, y);
+  const a = 0.06 * scale;
+  const bAx = a / Math.max(1, AR);
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(-phi);
+  ctx.globalAlpha = opacity;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, a, bAx, 0, 0, 2*Math.PI);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#1a1612';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(a*0.4, 0);
+  ctx.lineTo(a*1.3, 0);
+  ctx.strokeStyle = '#1a1612';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawCylinders() {
+  const g = state.geom;
+  const o = userToPx(0, 0);
+  ctx.beginPath();
+  ctx.arc(o.px, o.py, g.R1_geom.r * o.scale, 0, 2*Math.PI);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#1a1612';
+  ctx.stroke();
+  const innerUserX = g.R2_geom.cx - g.l;
+  const i = userToPx(innerUserX, 0);
+  ctx.beginPath();
+  ctx.arc(i.px, i.py, g.R2_geom.r * i.scale, 0, 2*Math.PI);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#1a1612';
+  ctx.fillStyle = '#ebe2cf';
+  ctx.fill();
+  ctx.stroke();
+  // NB: drawing happens in CSS pixels (the context is dpr-scaled), so these
+  // bounds must come from the layout box, not from canvas.width/height.
+  const box = canvas.getBoundingClientRect();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, box.width, box.height);
+  ctx.arc(o.px, o.py, g.R1_geom.r * o.scale, 0, 2*Math.PI, true);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(26, 22, 18, 0.15)';
+  ctx.lineWidth = 1;
+  for (let k = -box.height; k < box.width; k += 10) {
+    ctx.beginPath();
+    ctx.moveTo(k, 0);
+    ctx.lineTo(k + box.height, box.height);
+    ctx.stroke();
+  }
+  ctx.restore();
+  drawCylinderMark(o.px, o.py, g.R1_geom.r * o.scale, state.cylAngles.outer, '#b8552d');
+  drawCylinderMark(i.px, i.py, g.R2_geom.r * i.scale, state.cylAngles.inner, '#2d6e6e');
+}
+
+function drawCylinderMark(cx, cy, r, theta, color) {
+  const x = cx + r * Math.cos(theta);
+  const y = cy - r * Math.sin(theta);
+  ctx.save();
+  const tickInner = 0.92;
+  ctx.beginPath();
+  ctx.moveTo(cx + r * tickInner * Math.cos(theta),
+             cy - r * tickInner * Math.sin(theta));
+  ctx.lineTo(x, y);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, 4.5, 0, 2*Math.PI);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = '#1a1612';
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTrail() {
+  if (state.trail.length < 2) return;
+  ctx.save();
+  ctx.lineWidth = 1.2;
+  for (let i = 1; i < state.trail.length; i++) {
+    const a = state.trail[i-1], b = state.trail[i];
+    const t = i / state.trail.length;
+    ctx.strokeStyle = `rgba(201, 161, 59, ${0.15 + 0.55*t})`;
+    const pa = userToPx(a.x, a.y), pb = userToPx(b.x, b.y);
+    ctx.beginPath();
+    ctx.moveTo(pa.px, pa.py);
+    ctx.lineTo(pb.px, pb.py);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCrosshair(x, y) {
+  const { px, py } = userToPx(x, y);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(45, 110, 110, 0.5)';
+  ctx.setLineDash([3, 3]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(px - 14, py);  ctx.lineTo(px + 14, py);
+  ctx.moveTo(px, py - 14);  ctx.lineTo(px, py + 14);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawConnectingVector(fromX, fromY, toX, toY) {
+  const a = userToPx(fromX, fromY);
+  const b = userToPx(toX, toY);
+  const dx = b.px - a.px, dy = b.py - a.py;
+  const len = Math.sqrt(dx*dx + dy*dy);
+  if (len < 8) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(26, 22, 18, 0.85)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(a.px, a.py);
+  ctx.lineTo(b.px, b.py);
+  ctx.stroke();
+  const ux = dx/len, uy = dy/len;
+  const head = 8;
+  const wx = -uy, wy = ux;
+  ctx.beginPath();
+  ctx.moveTo(b.px, b.py);
+  ctx.lineTo(b.px - head*ux + 0.45*head*wx, b.py - head*uy + 0.45*head*wy);
+  ctx.lineTo(b.px - head*ux - 0.45*head*wx, b.py - head*uy - 0.45*head*wy);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(26, 22, 18, 0.85)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(a.px, a.py, 2, 0, 2*Math.PI);
+  ctx.fillStyle = 'rgba(26, 22, 18, 0.85)';
+  ctx.fill();
+  ctx.restore();
+}
+
+function renderPlot(svgId, series, color, tol) {
+  const svg = document.getElementById(svgId);
+  if (!svg) return;
+  const W = 320, H = 100, padL = 28, padR = 6, padT = 6, padB = 16;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const n = series.length;
+  const ymax = Math.max(tol * 1.4, ...series, 0.1);
+  const ymin = 0;
+  const xmax = Math.max(n - 1, 4);
+  const xToPx = i => padL + (xmax === 0 ? 0 : (i / xmax) * innerW);
+  const yToPx = v => padT + innerH - ((v - ymin) / (ymax - ymin)) * innerH;
+
+  let pts = "";
+  for (let i = 0; i < n; i++) {
+    pts += (i === 0 ? "M" : "L") + xToPx(i).toFixed(2) + "," + yToPx(series[i]).toFixed(2);
+  }
+
+  const axisColor = "rgba(26, 22, 18, 0.45)";
+  const tolY = yToPx(tol);
+  let xticks = "";
+  for (let k = 0; k <= xmax; k++) {
+    if (xmax > 12 && k % Math.ceil(xmax / 8) !== 0) continue;
+    const x = xToPx(k);
+    xticks += `<line x1="${x}" y1="${padT + innerH}" x2="${x}" y2="${padT + innerH + 3}" stroke="${axisColor}" />`;
+    if (k === 0 || k === xmax) {
+      xticks += `<text x="${x}" y="${H - 3}" font-family="JetBrains Mono, monospace" font-size="8" fill="${axisColor}" text-anchor="${k === 0 ? 'start' : 'end'}">${k}</text>`;
+    }
+  }
+  const ylabels = `
+    <text x="${padL - 4}" y="${padT + 8}" font-family="JetBrains Mono, monospace" font-size="8" fill="${axisColor}" text-anchor="end">${ymax.toFixed(2)}</text>
+    <text x="${padL - 4}" y="${padT + innerH}" font-family="JetBrains Mono, monospace" font-size="8" fill="${axisColor}" text-anchor="end">0</text>
+  `;
+
+  svg.innerHTML = `
+    <rect x="${padL}" y="${padT}" width="${innerW}" height="${innerH}" fill="none" stroke="${axisColor}" stroke-width="0.7" />
+    ${tol > 0 && tol < ymax ? `<line x1="${padL}" y1="${tolY}" x2="${padL + innerW}" y2="${tolY}" stroke="rgba(45, 110, 110, 0.55)" stroke-dasharray="3,3" stroke-width="1" />` : ''}
+    ${tol > 0 && tol < ymax ? `<text x="${padL + innerW - 3}" y="${tolY - 2}" font-family="JetBrains Mono, monospace" font-size="7" fill="rgba(45, 110, 110, 0.85)" text-anchor="end">tol</text>` : ''}
+    ${xticks}
+    ${ylabels}
+    ${n > 0 ? `<path d="${pts}" fill="none" stroke="${color}" stroke-width="1.6" />` : ''}
+    ${series.map((v, i) => `<circle cx="${xToPx(i)}" cy="${yToPx(v)}" r="${i === n - 1 ? 2.6 : 1.5}" fill="${color}" />`).join('')}
+  `;
+}
+
+function renderPlots() {
+  renderPlot('plot-dist', state.history.dist, '#b8552d', state.tolPos);
+  renderPlot('plot-ang',  state.history.ang,  '#2d6e6e', state.tolAng);
+  if (state.history.dist.length) {
+    val('plot-dist-now').textContent = state.history.dist[state.history.dist.length - 1].toFixed(3);
+    val('plot-ang-now').textContent  = state.history.ang [state.history.ang.length - 1].toFixed(3) + ' rad';
+  } else {
+    val('plot-dist-now').textContent = '—';
+    val('plot-ang-now').textContent  = '—';
+  }
+}
+
+function render() {
+  const cbox = canvas.getBoundingClientRect();
+  ctx.clearRect(0, 0, cbox.width, cbox.height);
+  drawCylinders();
+  drawTrail();
+  drawCrosshair(state.target.x, state.target.y);
+  drawSpheroid(state.target.x, state.target.y, state.target.phi, state.AR, '#2d6e6e', 0.45);
+  const p = currentUserPos();
+  drawSpheroid(p.x, p.y, state.current.phi, state.AR, '#b8552d', 1.0);
+  if (state.showVector && state.mode === 'play') {
+    drawConnectingVector(p.x, p.y, state.target.x, state.target.y);
+  }
+  document.getElementById('r-pos').textContent = `(${p.x.toFixed(3)}, ${p.y.toFixed(3)})`;
+  document.getElementById('r-phi').textContent = `${state.current.phi.toFixed(3)} rad`;
+}
+
+function val(id) { return document.getElementById(id); }
+
+const ids = ['phi0','phiT','t1','t2'];
+ids.forEach(k => {
+  const sl = val('s-'+k); if (!sl) return;
+  sl.addEventListener('input', () => {
+    onSlider(k, parseFloat(sl.value));
+  });
+});
+
+function onSlider(k, v) {
+  if (k === 'phi0') { state.start.phi = v; val('v-phi0').textContent = v.toFixed(2); state.current.phi = v; render(); }
+  if (k === 'phiT') { state.target.phi = v; val('v-phiT').textContent = v.toFixed(2); render(); }
+  if (k === 't1')   { val('v-t1').textContent = (v / Math.PI >= 0 ? '+' : '') + (v/Math.PI).toFixed(2) + ' π'; }
+  if (k === 't2')   { val('v-t2').textContent = (v / Math.PI >= 0 ? '+' : '') + (v/Math.PI).toFixed(2) + ' π'; }
+}
+
+canvas.addEventListener('click', (e) => {
+  if (state.mode !== 'setup' || state.challenge) return;
+  const r = canvas.getBoundingClientRect();
+  const u = pxToUser(e.clientX - r.left, e.clientY - r.top);
+  if (!inAnnulus(u.x, u.y)) return;
+  if (state.placeMode === 'start') {
+    state.start.x = u.x; state.start.y = u.y;
+    const [xi, eta] = cartToBipolar(u.x + state.geom.l, u.y, state.geom.b);
+    state.current = { xi, eta, phi: state.start.phi };
+    state.placeMode = 'target';
+    val('place-instruction').textContent = 'Click to set target →';
+  } else if (state.placeMode === 'target') {
+    state.target.x = u.x; state.target.y = u.y;
+    state.placeMode = 'start';
+    val('place-instruction').textContent = 'Click to reset spheroid →';
+  }
+  render();
+});
+
+val('tab-setup').addEventListener('click', () => switchMode('setup'));
+val('tab-play').addEventListener('click', () => switchMode('play'));
+
+function switchMode(m) {
+  state.mode = m;
+  val('tab-setup').classList.toggle('active', m === 'setup');
+  val('tab-play').classList.toggle('active', m === 'play');
+  val('panel-setup').style.display = m === 'setup' ? 'block' : 'none';
+  val('panel-play').style.display  = m === 'play'  ? 'block' : 'none';
+  val('panel-plots').style.display = m === 'play'  ? 'block' : 'none';
+}
+
+val('btn-commit').addEventListener('click', () => {
+  state.cycles = 0;
+  state.trail = [{ x: state.start.x, y: state.start.y }];
+  const [xi, eta] = cartToBipolar(state.start.x + state.geom.l, state.start.y, state.geom.b);
+  state.current = { xi, eta, phi: state.start.phi };
+  state.cylAngles = { outer: 0, inner: 0 };
+  state.finished = false;
+  state.result = null;
+  state.animating = false;
+  state.showVector = true;
+  const d0 = distToTarget(), a0 = angDist();
+  state.history = { dist: [d0.pos], ang: [a0] };
+  val('btn-run').disabled = false;
+  switchMode('play');
+  updatePlayStatus();
+  renderPlots();
+  render();
+});
+
+val('btn-reset').addEventListener('click', () => {
+  state.cycles = 0;
+  state.trail = [{ x: state.start.x, y: state.start.y }];
+  const [xi, eta] = cartToBipolar(state.start.x + state.geom.l, state.start.y, state.geom.b);
+  state.current = { xi, eta, phi: state.start.phi };
+  state.cylAngles = { outer: 0, inner: 0 };
+  state.finished = false;
+  state.result = null;
+  state.animating = false;
+  state.showVector = true;
+  const d0 = distToTarget(), a0 = angDist();
+  state.history = { dist: [d0.pos], ang: [a0] };
+  val('btn-run').disabled = false;
+  updatePlayStatus();
+  renderPlots();
+  render();
+});
+
+val('btn-finish').addEventListener('click', () => {
+  if (state.animating || state.finished || state.cycles === 0) return;
+  finishRun();
+});
+
+val('btn-freeplay').addEventListener('click', () => {
+  state.challenge = !state.challenge;
+  if (state.challenge) applyChallenge();
+  state.placeMode = 'start';
+  applyModeUI();
+  render();
+});
+
+val('btn-randomize').addEventListener('click', () => {
+  for (let tries = 0; tries < 100; tries++) {
+    const sx = (Math.random()*2 - 1)*0.95;
+    const sy = (Math.random()*2 - 1)*0.95;
+    const tx = (Math.random()*2 - 1)*0.95;
+    const ty = (Math.random()*2 - 1)*0.95;
+    if (inAnnulus(sx, sy) && inAnnulus(tx, ty)) {
+      state.start = { x: sx, y: sy, phi: (Math.random()*2-1)*Math.PI };
+      state.target = { x: tx, y: ty, phi: (Math.random()*2-1)*Math.PI };
+      const [xi, eta] = cartToBipolar(sx + state.geom.l, sy, state.geom.b);
+      state.current = { xi, eta, phi: state.start.phi };
+      val('s-phi0').value = state.start.phi;
+      val('s-phiT').value = state.target.phi;
+      val('v-phi0').textContent = state.start.phi.toFixed(2);
+      val('v-phiT').textContent = state.target.phi.toFixed(2);
+      render();
+      return;
+    }
+  }
+});
+
+val('btn-run').addEventListener('click', async () => {
+  if (state.animating || state.finished || state.cycles >= MAX_CYCLES) return;
+  const t1 = parseFloat(val('s-t1').value);
+  const t2 = parseFloat(val('s-t2').value);
+  if (t1 === 0 && t2 === 0) return;
+  await runCycle(t1, t2);
+});
+
+async function runCycle(theta1, theta2) {
+  state.animating = true;
+  state.showVector = false;
+  val('btn-run').disabled = true;
+  const start = [state.current.xi, state.current.eta, state.current.phi];
+  const { traj, finalCyl } = integrateLoop(start, theta1, theta2, state.geom, 600);
+  const lastIdx = traj.length - 1;
+  const baseDur = 2600;
+  const totalAngle = (Math.abs(theta1) + Math.abs(theta2)) * 2;
+  const total = Math.max(1500, Math.min(5000, baseDur * totalAngle / (8 * Math.PI)));
+  let t0 = null;
+  return new Promise(resolve => {
+    function step(now) {
+      if (t0 === null) t0 = now;
+      const t = Math.max(0, Math.min(1, (now - t0)/total));
+      const idx = Math.max(0, Math.min(lastIdx, Math.floor(t * lastIdx)));
+      const point = traj[idx] || traj[lastIdx];
+      const [xi, eta, phi, thOuter, thInner] = point;
+      state.current = { xi, eta, phi };
+      state.cylAngles = { outer: thOuter, inner: thInner };
+      const p = currentUserPos();
+      const last = state.trail[state.trail.length - 1];
+      if (!last || (last.x - p.x)**2 + (last.y - p.y)**2 > 0.0008) {
+        state.trail.push({ x: p.x, y: p.y });
+      }
+      render();
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        state.cylAngles = { outer: finalCyl.outer, inner: finalCyl.inner };
+        state.cycles++;
+        const d = distToTarget(), a = angDist();
+        state.history.dist.push(d.pos);
+        state.history.ang.push(a);
+        if (state.cycles >= MAX_CYCLES) finishRun();
+        state.showVector = true;
+        updatePlayStatus();
+        renderPlots();
+        render();
+        state.animating = false;
+        resolve();
+      }
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+// The score is the miss, measured in tolerances: each leg is the distance
+// divided by what counts as "there". Lower is better; because each leg is
+// bounded by the hypotenuse, a score under 1.00 means you are inside BOTH
+// tolerances at once. Nobody wins -- you stop, and you get a number.
+function scoreOf(dp, da) {
+  return Math.hypot(dp / state.tolPos, da / state.tolAng);
+}
+function bestScore() {
+  try { const v = localStorage.getItem('bestScore'); return v ? parseFloat(v) : null; }
+  catch { return null; }
+}
+function saveBest(x) {
+  try {
+    const b = bestScore();
+    if (b === null || x < b) localStorage.setItem('bestScore', x.toFixed(4));
+  } catch {}
+}
+
+function finishRun() {
+  if (state.finished) return;
+  const d = distToTarget(), a = angDist();
+  state.finished = true;
+  state.result = { dp: d.pos, da: a, cycles: state.cycles, score: scoreOf(d.pos, a) };
+  if (state.challenge && state.cycles > 0) saveBest(state.result.score);
+  updatePlayStatus();
+  render();
+}
+
+function updatePlayStatus() {
+  const d = distToTarget(), a = angDist();
+  const b = bestScore();
+  const bestTxt = b === null ? '' :
+    ` <span class="label" style="opacity:.5;">(best ${b.toFixed(2)})</span>`;
+  val('r-dist').innerHTML  = `<span class="v">${d.pos.toFixed(3)}</span> <span class="label" style="opacity:.5;">(tol ${state.tolPos.toFixed(2)})</span>`;
+  val('r-adist').innerHTML = `<span class="v">${a.toFixed(3)} rad</span> <span class="label" style="opacity:.5;">(tol ${state.tolAng.toFixed(2)})</span>`;
+  val('r-cycles').innerHTML = `<span class="v">${state.cycles} / ${MAX_CYCLES}</span>`;
+
+  const status = val('panel-play').querySelector('.status');
+  const card = val('result-card');
+  if (state.finished) {
+    const r = state.result;
+    status.classList.add('victory');
+    card.style.display = 'block';
+    card.innerHTML =
+      `<div class="result-head">Run over &mdash; ${r.cycles} cycle${r.cycles === 1 ? '' : 's'}</div>` +
+      `<div class="result-line">You left the spheroid <strong>${r.dp.toFixed(3)}</strong> away in ` +
+      `position and <strong>${r.da.toFixed(3)} rad</strong> (${(r.da * 180 / Math.PI).toFixed(0)}&deg;) ` +
+      `off in orientation.</div>` +
+      `<div class="result-score">score <strong>${r.score.toFixed(2)}</strong>` +
+      `<span class="label"> &nbsp;lower is better${bestTxt}</span></div>` +
+      `<div class="result-line" style="opacity:.75;">` +
+      (r.score < 1
+        ? `Under 1.00 &mdash; you landed it inside both tolerances. Few do.`
+        : `The miss in units of tolerance: &radic;((&Delta;x/${state.tolPos.toFixed(2)})&sup2; + (&Delta;&phi;/${state.tolAng.toFixed(2)})&sup2;). Under 1.00 means you were inside both.`) +
+      `</div>`;
+  } else {
+    status.classList.remove('victory');
+    card.style.display = 'none';
+  }
+  val('btn-run').disabled    = state.finished || state.cycles >= MAX_CYCLES;
+  val('btn-finish').disabled = state.finished || state.cycles === 0;
+  val('btn-finish').innerHTML = state.finished ? 'Scored' : 'Stop &amp; score';
+}
+
+function init() {
+  setupCanvas();
+  rebuildGeom();
+  state.trail = [{ x: state.start.x, y: state.start.y }];
+  switchMode('setup');
+  applyChallenge();
+  applyModeUI();
+  state.trail = [{ x: state.start.x, y: state.start.y }];
+  onSlider('t1', parseFloat(val('s-t1').value));   // label from the actual value
+  onSlider('t2', parseFloat(val('s-t2').value));
+  render();
+
+  const veil = val('intro-veil');
+  const seen = (() => { try { return sessionStorage.getItem('introSeen') === '1'; } catch { return false; } })();
+  const params = new URLSearchParams(location.search);
+  if (seen && params.get('intro') !== '1') {
+    veil.style.display = 'none';
+  }
+  function dismissIntro() {
+    veil.style.opacity = '0';
+    veil.style.transition = 'opacity 0.25s ease-out';
+    setTimeout(() => { veil.style.display = 'none'; }, 250);
+    try { sessionStorage.setItem('introSeen', '1'); } catch {}
+  }
+  val('btn-intro-go').addEventListener('click', dismissIntro);
+  veil.addEventListener('click', e => { if (e.target === veil) dismissIntro(); });
+
+  val('btn-share').addEventListener('click', async () => {
+    const url = location.href;
+    const title = "Piro's Game — a geometric-phase toy";
+    const b = bestScore();
+    const text = (state.finished ? `Scored ${state.result.score.toFixed(2)} in ${state.result.cycles} cycles. ` :
+                  b !== null ? `My best score: ${b.toFixed(2)} (lower is better). ` : '') +
+                 "Drive a spheroid through a Stokes flow and watch geometric phase misbehave.";
+    const btn = val('btn-share');
+    try {
+      if (navigator.share && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        await navigator.share({ title, text, url });
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        btn.classList.add('copied');
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied';
+        setTimeout(() => { btn.classList.remove('copied'); btn.textContent = orig; }, 1600);
+      }
+    } catch { /* user cancelled native share, ignore */ }
+  });
+}
+init();
+</script>
+</body>
+</html>
